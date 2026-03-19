@@ -1,0 +1,145 @@
+<main class="page">
+  <section class="hero">
+    <p class="eyebrow">Speech-powered timer</p>
+    <h1>Word Counter</h1>
+    <p class="subtitle">
+      Set a timer, choose the word to listen for, and let the app count each
+      spoken match while the session is running.
+    </p>
+  </section>
+
+  <mat-card class="timer-card">
+    <div class="timer-card__header">
+      <h2>Session setup</h2>
+      <p>Choose a preset or set your own hours, minutes, and seconds.</p>
+    </div>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Timer preset</mat-label>
+      <mat-select
+        [ngModel]="targetWord()"
+        (ngModelChange)="onPresetChange($event)"
+      >
+        @for (preset of presets; track preset.value) {
+          <mat-option [value]="preset.value">{{ preset.label }}</mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <!-- <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Word or phrase to count</mat-label>
+      <input
+        matInput
+        maxlength="40"
+        [ngModel]="targetWord()"
+        (ngModelChange)="updateTargetWord($event)"
+      />
+    </mat-form-field> -->
+
+    <div class="time-inputs">
+      <mat-form-field appearance="outline">
+        <mat-label>Hours</mat-label>
+        <input
+          matInput
+          inputmode="numeric"
+          type="number"
+          min="0"
+          max="23"
+          [ngModel]="hours()"
+          (ngModelChange)="updateField('hours', $event)"
+        />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Minutes</mat-label>
+        <input
+          matInput
+          inputmode="numeric"
+          type="number"
+          min="0"
+          max="59"
+          [ngModel]="minutes()"
+          (ngModelChange)="updateField('minutes', $event)"
+        />
+      </mat-form-field>
+
+      <mat-form-field appearance="outline">
+        <mat-label>Seconds</mat-label>
+        <input
+          matInput
+          inputmode="numeric"
+          type="number"
+          min="0"
+          max="59"
+          [ngModel]="seconds()"
+          (ngModelChange)="updateField('seconds', $event)"
+        />
+      </mat-form-field>
+    </div>
+
+    <section class="digital-panel" aria-label="Digital countdown timer">
+      <div class="digital-face">{{ displayTime() }}</div>
+      <div class="progress-track" aria-hidden="true">
+        <div class="progress-fill" [style.width.%]="progress()"></div>
+      </div>
+    </section>
+
+    <section class="listening-panel">
+      <div class="listening-row">
+        <div class="listening-indicator" [class.listening-indicator--active]="isListening()">
+          <span class="listening-dot"></span>
+          <span class="listening-dot"></span>
+          <span class="listening-dot"></span>
+        </div>
+        <div class="listening-copy">
+          <p class="listening-label">Listening status</p>
+          <p class="listening-status">{{ listeningStatus() }}</p>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <p class="stat-label">Live count</p>
+          <p class="stat-value">{{ targetWordCount() }}</p>
+        </div>
+
+        <div class="stat-card">
+          <p class="stat-label">Final total</p>
+          <p class="stat-value">
+            {{ finalWordCount() ?? '--' }}
+          </p>
+        </div>
+      </div>
+
+      <div class="transcript-card">
+        <p class="stat-label">Latest heard phrase</p>
+        <p class="transcript-text">
+          {{ liveTranscript() || 'Waiting for speech...' }}
+        </p>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button
+        mat-flat-button
+        class="primary-action"
+        type="button"
+        [disabled]="!canStart()"
+        (click)="startTimer()"
+      >
+        Play
+      </button>
+
+      <button
+        mat-stroked-button
+        type="button"
+        [disabled]="!isRunning()"
+        (click)="pauseTimer()"
+      >
+        Pause
+      </button>
+
+      <button mat-button type="button" (click)="resetTimer()">Reset</button>
+    </div>
+  </mat-card>
+</main>
