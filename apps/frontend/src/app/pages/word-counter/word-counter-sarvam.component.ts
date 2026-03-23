@@ -29,6 +29,11 @@ type SarvamTranscriptionResponse = {
   language_probability?: number | null;
 };
 
+type QueuedTranscription = {
+  audioChunk: Blob;
+  sessionId: number;
+};
+
 @Component({
   selector: 'app-word-counter-sarvam',
   standalone: true,
@@ -52,12 +57,10 @@ export class SarvamWordCounterComponent implements OnDestroy {
   private audioContext: AudioContext | null = null;
   private mediaRecorder: MediaRecorder | null = null;
   private microphoneStream: MediaStream | null = null;
-  private streamPendingStop: MediaStream | null = null;
-  private transcriptionQueue: Blob[] = [];
+  private transcriptionQueue: QueuedTranscription[] = [];
   private isProcessingChunk = false;
-  private isClosingSession = false;
-  private isAcceptingTranscripts = false;
-  private isWaitingForRecorderFlush = false;
+  private currentSessionId = 0;
+  private acceptedSessionId: number | null = null;
   private readonly chunkDurationMs = 4000;
   private readonly sarvamConfig = {
     model: 'saaras:v3',
@@ -183,8 +186,8 @@ export class SarvamWordCounterComponent implements OnDestroy {
       return;
     }
 
-    this.isClosingSession = false;
-    this.isAcceptingTranscripts = true;
+    this.currentSessionId += 1;
+    this.acceptedSessionId = this.currentSessionId;
     this.transcriptionQueue = [];
     this.targetWordCount.set(0);
     this.finalWordCount.set(null);
@@ -192,7 +195,7 @@ export class SarvamWordCounterComponent implements OnDestroy {
     this.speechError.set(null);
     this.isRunning.set(true);
     this.clearTimer();
-    void this.startSpeechCapture();
+    void this.startSpeechCapture(this.currentSessionId);
 
     this.intervalId = window.setInterval(() => {
       const nextValue = this.remainingSeconds() - 1;
@@ -210,8 +213,8 @@ export class SarvamWordCounterComponent implements OnDestroy {
   protected pauseTimer(): void {
     this.isRunning.set(false);
     this.clearTimer();
-    this.isClosingSession = false;
-    this.isAcceptingTranscripts = false;
+    this.acceptedSessionId = null;
+    this.transcriptionQueue = [];
     this.stopSpeechCapture();
   }
 
@@ -240,28 +243,17 @@ export class SarvamWordCounterComponent implements OnDestroy {
   }
 
   private completeSession(): void {
+    const finishedSessionId = this.acceptedSessionId;
     this.isRunning.set(false);
     this.clearTimer();
-    this.isClosingSession = true;
     this.isListening.set(false);
-    this.stopSpeechCapture();
-    this.finalizeCompletedSessionIfReady();
-  }
-
-  private finalizeCompletedSessionIfReady(): void {
-    if (
-      !this.isClosingSession ||
-      this.isWaitingForRecorderFlush ||
-      this.isProcessingChunk ||
-      this.transcriptionQueue.length > 0
-    ) {
-      return;
-    }
-
-    this.isClosingSession = false;
-    this.isAcceptingTranscripts = false;
     this.finalWordCount.set(this.targetWordCount());
     void this.playCompletionSound();
+    this.stopSpeechCapture();
+
+    if (finishedSessionId !== this.acceptedSessionId) {
+      this.finalWordCount.set(this.targetWordCount());
+    }
   }
 
   private parseValue(rawValue: string | number, max: number): number {
@@ -295,7 +287,7 @@ export class SarvamWordCounterComponent implements OnDestroy {
     );
   }
 
-  private async startSpeechCapture(): Promise<void> {
+  private async startSpeechCapture(sessionId: number): Promise<void> {
     if (!this.speechSupported()) {
       this.speechError.set(
         'MediaRecorder or microphone access is not supported on this browser.',
@@ -308,7 +300,7 @@ export class SarvamWordCounterComponent implements OnDestroy {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.microphoneStream = stream;
-      this.startRecorderSegment(stream);
+      this.startRecorderSegment(stream, sessionId);
     } catch {
       this.isListening.set(false);
       this.speechError.set('Microphone access failed.');
@@ -322,22 +314,20 @@ export class SarvamWordCounterComponent implements OnDestroy {
     }
 
     const recorder = this.mediaRecorder;
+    const stream = this.microphoneStream;
     this.mediaRecorder = null;
+    this.microphoneStream = null;
 
     if (recorder && recorder.state !== 'inactive') {
-      this.isWaitingForRecorderFlush = true;
-      this.streamPendingStop = this.microphoneStream;
-      this.microphoneStream = null;
       recorder.stop();
     } else {
-      this.microphoneStream?.getTracks().forEach((track) => track.stop());
-      this.microphoneStream = null;
+      stream?.getTracks().forEach((track) => track.stop());
     }
 
     this.isListening.set(false);
   }
 
-  private startRecorderSegment(stream: MediaStream): void {
+  private startRecorderSegment(stream: MediaStream, sessionId: number): void {
     const mimeType = this.resolveRecorderMimeType();
     const recorder = mimeType
       ? new MediaRecorder(stream, { mimeType })
@@ -349,7 +339,7 @@ export class SarvamWordCounterComponent implements OnDestroy {
         return;
       }
 
-      this.transcriptionQueue.push(event.data);
+      this.transcriptionQueue.push({ audioChunk: event.data, sessionId });
       void this.processNextChunk();
     };
 
@@ -364,22 +354,21 @@ export class SarvamWordCounterComponent implements OnDestroy {
 
     recorder.onstop = () => {
       this.isListening.set(false);
-      this.isWaitingForRecorderFlush = false;
-      this.streamPendingStop?.getTracks().forEach((track) => track.stop());
-      this.streamPendingStop = null;
+      if (this.mediaRecorder === recorder) {
+        this.mediaRecorder = null;
+      }
 
       if (
-        !this.isClosingSession &&
         this.isRunning() &&
-        this.isAcceptingTranscripts &&
+        this.acceptedSessionId === sessionId &&
         this.microphoneStream === stream &&
         stream.active
       ) {
-        this.startRecorderSegment(stream);
+        this.startRecorderSegment(stream, sessionId);
         return;
       }
 
-      this.finalizeCompletedSessionIfReady();
+      stream.getTracks().forEach((track) => track.stop());
     };
 
     this.mediaRecorder = recorder;
@@ -398,7 +387,6 @@ export class SarvamWordCounterComponent implements OnDestroy {
 
     const nextChunk = this.transcriptionQueue.shift();
     if (!nextChunk) {
-      this.finalizeCompletedSessionIfReady();
       return;
     }
 
@@ -411,13 +399,14 @@ export class SarvamWordCounterComponent implements OnDestroy {
 
       if (this.transcriptionQueue.length > 0) {
         void this.processNextChunk();
-      } else {
-        this.finalizeCompletedSessionIfReady();
       }
     }
   }
 
-  private async transcribeChunk(audioChunk: Blob): Promise<void> {
+  private async transcribeChunk({
+    audioChunk,
+    sessionId,
+  }: QueuedTranscription): Promise<void> {
     const formData = new FormData();
     const fileName = this.buildChunkFilename(audioChunk.type);
 
@@ -434,7 +423,7 @@ export class SarvamWordCounterComponent implements OnDestroy {
         ),
       );
 
-      if (!this.isAcceptingTranscripts && !this.isClosingSession) {
+      if (this.acceptedSessionId !== sessionId) {
         return;
       }
 
@@ -450,9 +439,17 @@ export class SarvamWordCounterComponent implements OnDestroy {
         return;
       }
 
-      this.targetWordCount.update((count) => count + matchCount);
+      this.targetWordCount.update((count) => {
+        const nextCount = count + matchCount;
+
+        if (!this.isRunning()) {
+          this.finalWordCount.set(nextCount);
+        }
+
+        return nextCount;
+      });
     } catch {
-      if (this.isAcceptingTranscripts || this.isClosingSession) {
+      if (this.acceptedSessionId === sessionId) {
         this.speechError.set('Sarvam speech-to-text request failed.');
       }
     }
