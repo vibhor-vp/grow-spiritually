@@ -8,7 +8,9 @@
   "targets": {
     "build": {
       "executor": "@angular/build:application",
-      "outputs": ["{options.outputPath}"],
+      "outputs": [
+        "{options.outputPath}"
+      ],
       "options": {
         "outputPath": "dist/apps/frontend",
         "browser": "apps/frontend/src/main.ts",
@@ -19,7 +21,9 @@
             "input": "apps/frontend/public"
           }
         ],
-        "styles": ["apps/frontend/src/styles.css"]
+        "styles": [
+          "apps/frontend/src/styles.css"
+        ]
       },
       "configurations": {
         "production": {
@@ -35,7 +39,11 @@
               "maximumError": "8kb"
             }
           ],
-          "outputHashing": "all"
+          "outputHashing": "all",
+          "fileReplacements": [{
+            "replace": "apps/frontend/src/environments/environment.ts",
+            "with": "apps/frontend/src/environments/environment.prod.ts"
+          }]
         },
         "development": {
           "optimization": false,
@@ -43,7 +51,7 @@
           "sourceMap": true
         }
       },
-      "defaultConfiguration": "production"
+      "defaultConfiguration": "development"
     },
     "serve": {
       "continuous": true,
@@ -57,7 +65,9 @@
         }
       },
       "defaultConfiguration": "development",
-      "dependsOn": ["backend:serve"],
+      "dependsOn": [
+        "backend:serve"
+      ],
       "options": {
         "proxyConfig": "apps/frontend/proxy.conf.json"
       }

@@ -14,6 +14,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
+import { environment } from 'apps/frontend/src/environments/environment';
 
 type TimerPreset = {
   label: string;
@@ -428,7 +429,7 @@ export class SarvamWordCounterComponent implements OnDestroy {
     try {
       const response = await firstValueFrom(
         this.http.post<SarvamTranscriptionResponse>(
-          '/api/sarvam/speech-to-text',
+          `${environment.apiUrl}/sarvam/speech-to-text`,
           formData,
         ),
       );
