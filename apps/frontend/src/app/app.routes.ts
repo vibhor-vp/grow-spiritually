@@ -9,8 +9,8 @@ export const appRoutes: Route[] = [
   {
     path: 'word-counter',
     loadComponent: () =>
-      import('./pages/word-counter/word-counter.component').then(
-        (m) => m.WordCounterComponent,
+      import('./pages/word-counter/word-counter-sarvam.component').then(
+        (m) => m.SarvamWordCounterComponent,
       ),
   },
   {

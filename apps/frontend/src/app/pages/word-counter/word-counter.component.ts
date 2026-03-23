@@ -416,28 +416,8 @@ export class WordCounterComponent implements OnDestroy {
   }
 
   private countMatches(transcript: string): number {
-    // const target = this.normalizeText(this.targetWord());
-    // const normalizedTranscript = this.normalizeText(transcript);
-
-    // if (!target || !normalizedTranscript) {
-    //   return 0;
-    // }
-
-    // const words = normalizedTranscript.split(' ').filter(Boolean);
-    // const targetLength = target.split(' ').length;
-
-    // let count = 0;
-
-    // for (let index = 0; index < words.length; index += 1) {
-    //   const maybePhrase = words.slice(index, index + targetLength).join(' ');
-
-    //   if (maybePhrase === target) {
-    //     count += 1;
-    //   }
-    // }
-    
     const hindiRegex = new RegExp(`(^|\\s)${this.targetWord()}(?=\\s|$)`, "gu");
-    
+
     const count = (transcript.match(hindiRegex) || []).length;
     return count;
   }
